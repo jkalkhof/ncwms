@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
 import uk.ac.rdg.resc.edal.catalogue.jaxb.CacheInfo;
 import uk.ac.rdg.resc.edal.catalogue.jaxb.CatalogueConfig;
 import uk.ac.rdg.resc.edal.catalogue.jaxb.DatasetConfig;
+import uk.ac.rdg.resc.edal.dataset.Dataset;
 
 /**
  * Deals purely with the (de)serialisation of the ncWMS config file. This
@@ -195,6 +196,15 @@ public class NcwmsConfig extends CatalogueConfig {
              * Otherwise read the file
              */
             config = deserialise(new FileReader(configFile));
+            
+            // sanity check - dump list of datasets
+            for (int i=0; i<config.getDatasets().length; i++) {
+                DatasetConfig datasetConfig = config.getDatasets()[i];
+                // id, title, location
+                System.out.println("id: " + datasetConfig.getId() + " title: "+datasetConfig.getTitle()  +
+                        " location: " + datasetConfig.getLocation());
+            }
+            
             config.configFile = configFile;
         }
         return config;

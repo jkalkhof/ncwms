@@ -19,8 +19,8 @@
     <server>
         <title>ncWMS Server</title>
         <allowFeatureInfo>true</allowFeatureInfo>
-        <maxImageWidth>1024</maxImageWidth>
-        <maxImageHeight>1024</maxImageHeight>
+        <maxImageWidth>4096</maxImageWidth>
+        <maxImageHeight>4096</maxImageHeight>
         <abstract></abstract>
         <keywords></keywords>
         <url></url>
