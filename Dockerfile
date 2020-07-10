@@ -1,55 +1,65 @@
-FROM unidata/tomcat-docker:8.5
-MAINTAINER Kyle Wilcox <kyle@axiomdatascience.com>
+# dockerfile modified from https://hub.docker.com/r/axiom/ncwms/dockerfile
+FROM maven:3.6.3-jdk-8 as builder
 
-RUN \
-    apt-get update && \
-    apt-get install -y \
-        git \
-        maven \
-        unzip \
-        && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+WORKDIR /src/edal
 
-# Fix for java8 in jessie
-# https://serverfault.com/questions/830636/cannot-install-openjdk-8-jre-headless-on-debian-jessie/830637#830637
-# https://askubuntu.com/questions/190582/installing-java-automatically-with-silent-option
-RUN echo "deb http://ppa.launchpad.net/webupd8team/java/ubuntu xenial main\ndeb-src http://ppa.launchpad.net/webupd8team/java/ubuntu xenial main" > /etc/apt/sources.list.d/webupd8team-java.list && \
-     apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys EEA14886 && \
-     apt-get update && \
-     echo debconf shared/accepted-oracle-license-v1-1 select true | debconf-set-selections && \
-     echo debconf shared/accepted-oracle-license-v1-1 seen true | debconf-set-selections && \
-     apt-get install -y oracle-java8-installer && \
-     update-java-alternatives -s java-8-oracle && \
-     export JAVA_HOME=/usr/lib/jvm/java-8-oracle
+ARG EDAL_CACHE_BUST=1
 
-# Compile edal to use required features in develop branch
-ENV EDAL_VERSION edal-1.4.1
-RUN mkdir /edal && \
-    cd /edal && \
-    git clone https://github.com/Reading-eScience-Centre/edal-java.git && \
-    cd edal-java && \
-    git checkout ${EDAL_VERSION} && \
-    JAVA_HOME=/usr/lib/jvm/java-8-oracle mvn clean install
+# ARG EDAL_SOURCE_ORG=axiom-data-science
+ARG EDAL_SOURCE_ORG=jkalkhof
+#ARG EDAL_SOURCE_ORG=Reading-eScience-Centre
+
+#ARG EDAL_SOURCE_BRANCH=develop
+#ARG EDAL_SOURCE_BRANCH=master
+ARG EDAL_SOURCE_BRANCH=edal-1.4.1-ads
+
+# we want ADS ncwms version of edal
+# edal-java-edal-1.4.1-ads
+# https://github.com/jkalkhof/edal-java.git
+
+# Compile edal to use required features in dev branch
+RUN echo "Using EDAL https://github.com/${EDAL_SOURCE_ORG}/edal-java.git@${EDAL_SOURCE_BRANCH}" && \
+    git clone --depth 1 https://github.com/${EDAL_SOURCE_ORG}/edal-java.git -b ${EDAL_SOURCE_BRANCH} . \
+    && mvn clean install
+
+WORKDIR /src/ncwms
+
+# Cache some dependencies
+COPY pom.xml .
+RUN mvn clean test dependency:go-offline
 
 # Compile and install ncWMS
-COPY . /ncWMS
-RUN cd /ncWMS && \
-    JAVA_HOME=/usr/lib/jvm/java-8-oracle mvn clean install && \
-    unzip target/ncWMS2.war -d $CATALINA_HOME/webapps/ncWMS/ && \
-    rm -rf /edal && \
-    rm -rf /ncWMS/target
+COPY . .
+RUN mvn clean install
+
+# FROM unidata/tomcat-docker:8.5
+FROM tomcat:9-jdk8-openjdk
+MAINTAINER Kyle Wilcox <kyle@axiomdatascience.com>
+
+COPY --from=builder /src/ncwms/target/ncWMS2.war ./ncWMS2.war
+
+ARG WEB_CONTEXT=ROOT
+RUN unzip ./ncWMS2.war -d $CATALINA_HOME/webapps/${WEB_CONTEXT}/ && \
+    rm ./ncWMS2.war
+
+COPY ./config /ncWMS/config
+COPY ./samples /ncWMS/samples
+COPY entrypoint.sh /ncWMS/entrypoint.sh
+
+RUN sed -i -e 's/<Context>/<Context privileged="true">/' conf/context.xml
 
 # Set login-config to BASIC since it is handled through Tomcat
-RUN sed -i -e 's/DIGEST/BASIC/' $CATALINA_HOME/webapps/ncWMS/WEB-INF/web.xml && \
+# cp /ncWMS/config/ehcache.xml $CATALINA_HOME/conf/ehcache.xml && \
+# cp /ncWMS/config/ecache.xml $CATALINA_HOME/conf/ecache.xml && \
+RUN sed -i -e 's/DIGEST/BASIC/' $CATALINA_HOME/webapps/${WEB_CONTEXT}/WEB-INF/web.xml && \
     cp /ncWMS/config/setenv.sh $CATALINA_HOME/bin/setenv.sh && \
-    cp /ncWMS/config/ecache.xml $CATALINA_HOME/conf/ecache.xml && \
     cp /ncWMS/config/tomcat-users.xml $CATALINA_HOME/conf/tomcat-users.xml && \
     mkdir -p $CATALINA_HOME/conf/Catalina/localhost/ && \
-    cp /ncWMS/config/ncWMS.xml $CATALINA_HOME/conf/Catalina/localhost/ncWMS.xml && \
+    cp /ncWMS/config/context.xml $CATALINA_HOME/conf/Catalina/localhost/${WEB_CONTEXT}.xml && \
     mkdir -p $CATALINA_HOME/.ncWMS2 && \
     cp /ncWMS/config/config.xml $CATALINA_HOME/.ncWMS2/config.xml
 
-ENTRYPOINT ["/ncWMS/entrypoint.sh"]
+# ENTRYPOINT ["/ncWMS/entrypoint.sh"]
 
 EXPOSE 8080 8443 9090
 CMD ["catalina.sh", "run"]
