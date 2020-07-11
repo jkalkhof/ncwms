@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  ads-ncwms:
+    image: ads-ncwms:v2020-07-10
+    volumes:
+      - type: bind
+        source: /home/homeuser/.ncWMS2
+        target: /usr/local/tomcat/.ncWMS2
+      - type: bind
+        source: /home/homeuser/source/ads/ncwms/samples
+        target: /home/homeuser/source/ads/ncwms/samples
+    # network_mode: "host"
+    ports:
+      - 9080:8080
+    command: catalina.sh run
+    # sed -i 's/port="8080"/port="9080"/' /usr/local/tomcat/conf/server.xml
+    # command: bash -c "sed -i 's/port=\"8080\"/port=\"9080\"/' /usr/local/tomcat/conf/server.xml && catalina.sh run"
