@@ -59,7 +59,23 @@ RUN sed -i -e 's/DIGEST/BASIC/' $CATALINA_HOME/webapps/${WEB_CONTEXT}/WEB-INF/we
     mkdir -p $CATALINA_HOME/.ncWMS2 && \
     cp /ncWMS/config/config.xml $CATALINA_HOME/.ncWMS2/config.xml
 
-# ENTRYPOINT ["/ncWMS/entrypoint.sh"]
+# gosu needed for entrypoint script
+# RUN apt-get install gosu
+# grab gosu for easy step-down from root
+ENV GOSU_VERSION 1.10
+RUN set -x \
+  && curl -sSLo /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)" \
+  && curl -sSLo /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture).asc" \
+  && export GNUPGHOME="$(mktemp -d)" \
+  && gpg --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
+  && gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
+  && rm -r "$GNUPGHOME" /usr/local/bin/gosu.asc \
+  && chmod +x /usr/local/bin/gosu \
+  && gosu nobody true
+
+# update conf/Catalina/localhost/ROOT.xml
+# update conf/Catalina/localhost/ncWMS.xml
+ENTRYPOINT ["/ncWMS/entrypoint.sh"]
 
 EXPOSE 8080 8443 9090
 CMD ["catalina.sh", "run"]
